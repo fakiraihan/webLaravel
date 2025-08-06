@@ -196,19 +196,16 @@ pipeline {
                             --network %DOCKER_NETWORK% ^
                             -v "%CD%":/usr/src ^
                             -w /usr/src ^
-                            sonarsource/sonar-scanner-cli:latest ^
+                            sonarsource/sonar-scanner-cli:4.8 ^
                             -Dsonar.host.url=http://%SONARQUBE_CONTAINER%:9000 ^
-                            -Dsonar.token=admin ^
+                            -Dsonar.login=admin ^
+                            -Dsonar.password=admin ^
                             -Dsonar.projectKey=webLaravel ^
                             -Dsonar.projectName=webLaravel ^
                             -Dsonar.projectVersion=1.0 ^
                             -Dsonar.sources=app,config,database,routes,resources ^
-                            -Dsonar.exclusions=vendor/**,storage/**,bootstrap/cache/**,public/**,node_modules/**,tests/** ^
-                            -Dsonar.php.coverage.reportPaths=coverage.xml ^
-                            -Dsonar.php.tests.reportPath=phpunit-report.xml ^
-                            -Dsonar.language=php ^
-                            -Dsonar.sourceEncoding=UTF-8 ^
-                            -Dsonar.qualitygate.wait=true
+                            -Dsonar.exclusions=vendor/**,storage/**,bootstrap/cache/**,public/**,node_modules/**,tests/**
+                    '''
                     '''
                 }
             }
