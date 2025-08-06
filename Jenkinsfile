@@ -170,8 +170,16 @@ pipeline {
                 always {
                     // Archive test results
                     junit testResults: 'phpunit-report.xml', allowEmptyResults: true
-                    // Archive coverage reports for SonarQube
-                    archiveArtifacts artifacts: 'coverage.xml', fingerprint: true
+                    
+                    // Archive coverage reports for SonarQube only if they exist
+                    script {
+                        if (fileExists('coverage.xml')) {
+                            archiveArtifacts artifacts: 'coverage.xml', fingerprint: true
+                            echo 'Coverage report archived successfully'
+                        } else {
+                            echo 'No coverage.xml found - skipping coverage artifact archiving'
+                        }
+                    }
                 }
             }
         }
