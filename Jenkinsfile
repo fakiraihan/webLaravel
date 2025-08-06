@@ -198,7 +198,7 @@ pipeline {
                                 -v "%CD%":/usr/src ^
                                 -w /usr/src ^
                                 sonarsource/sonar-scanner-cli:latest ^
-                                -Dsonar.host.url=http://localhost:9000 ^
+                                -Dsonar.host.url=http://%SONARQUBE_CONTAINER%:9000 ^
                                 -Dsonar.login=admin ^
                                 -Dsonar.password=admin ^
                                 -Dsonar.projectKey=webLaravel ^
