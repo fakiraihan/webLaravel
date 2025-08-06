@@ -130,8 +130,11 @@ pipeline {
                     echo 'Generating application key...'
                     bat 'php artisan key:generate'
                     
-                    echo 'Running database migrations...'
-                    bat 'php artisan migrate --force'
+                    echo 'Cleaning up old database...'
+                    bat 'if exist database\\database.sqlite del database\\database.sqlite'
+                    
+                    echo 'Creating fresh database...'
+                    bat 'php artisan migrate:fresh --force'
                     
                     echo 'Seeding database...'
                     bat 'php artisan db:seed --force'
