@@ -189,29 +189,27 @@ pipeline {
                 script {
                     echo 'Starting SonarQube static analysis with Docker...'
                     
-                    // Run SonarQube analysis using Docker
-                    withSonarQubeEnv('SonarQube') {
-                        bat '''
-                            echo Running SonarQube scanner in Docker container...
-                            docker run --rm ^
-                                --network %DOCKER_NETWORK% ^
-                                -v "%CD%":/usr/src ^
-                                -w /usr/src ^
-                                sonarsource/sonar-scanner-cli:latest ^
-                                -Dsonar.host.url=http://%SONARQUBE_CONTAINER%:9000 ^
-                                -Dsonar.login=admin ^
-                                -Dsonar.password=admin ^
-                                -Dsonar.projectKey=webLaravel ^
-                                -Dsonar.projectName=webLaravel ^
-                                -Dsonar.projectVersion=1.0 ^
-                                -Dsonar.sources=app,config,database,routes,resources ^
-                                -Dsonar.exclusions=vendor/**,storage/**,bootstrap/cache/**,public/**,node_modules/**,tests/** ^
-                                -Dsonar.php.coverage.reportPaths=coverage.xml ^
-                                -Dsonar.php.tests.reportPath=phpunit-report.xml ^
-                                -Dsonar.language=php ^
-                                -Dsonar.sourceEncoding=UTF-8
-                        '''
-                    }
+                    // Run SonarQube analysis using Docker (without withSonarQubeEnv)
+                    bat '''
+                        echo Running SonarQube scanner in Docker container...
+                        docker run --rm ^
+                            --network %DOCKER_NETWORK% ^
+                            -v "%CD%":/usr/src ^
+                            -w /usr/src ^
+                            sonarsource/sonar-scanner-cli:latest ^
+                            -Dsonar.host.url=http://%SONARQUBE_CONTAINER%:9000 ^
+                            -Dsonar.token=admin ^
+                            -Dsonar.projectKey=webLaravel ^
+                            -Dsonar.projectName=webLaravel ^
+                            -Dsonar.projectVersion=1.0 ^
+                            -Dsonar.sources=app,config,database,routes,resources ^
+                            -Dsonar.exclusions=vendor/**,storage/**,bootstrap/cache/**,public/**,node_modules/**,tests/** ^
+                            -Dsonar.php.coverage.reportPaths=coverage.xml ^
+                            -Dsonar.php.tests.reportPath=phpunit-report.xml ^
+                            -Dsonar.language=php ^
+                            -Dsonar.sourceEncoding=UTF-8 ^
+                            -Dsonar.qualitygate.wait=true
+                    '''
                 }
             }
         }
@@ -219,14 +217,50 @@ pipeline {
         stage('Quality Gate Check') {
             steps {
                 script {
-                    echo 'Waiting for SonarQube Quality Gate...'
-                    timeout(time: 5, unit: 'MINUTES') {
-                        def qg = waitForQualityGate()
-                        if (qg.status != 'OK') {
-                            error "Pipeline aborted due to quality gate failure: ${qg.status}"
-                        }
-                        echo 'Quality Gate passed successfully!'
-                    }
+                    echo 'Checking SonarQube Quality Gate...'
+                    
+                    // Wait a bit for analysis to complete
+                    bat 'ping 127.0.0.1 -n 31 > nul'
+                    
+                    // Check quality gate status via API
+                    bat '''
+                        echo Checking quality gate status...
+                        set /a count=0
+                        :check_quality_gate
+                        set /a count+=1
+                        if %count% GTR 10 (
+                            echo Quality gate check timeout after 5 minutes
+                            exit /b 1
+                        )
+                        
+                        echo Checking quality gate... attempt %count%/10
+                        curl -u admin:admin "http://localhost:%SONARQUBE_PORT%/api/qualitygates/project_status?projectKey=webLaravel" > qg_result.json 2>nul
+                        if %errorlevel% neq 0 (
+                            echo Quality gate API call failed, waiting 30 seconds...
+                            ping 127.0.0.1 -n 31 > nul
+                            goto check_quality_gate
+                        )
+                        
+                        findstr /i "ERROR" qg_result.json
+                        if %errorlevel% equ 0 (
+                            echo Quality Gate FAILED!
+                            type qg_result.json
+                            exit /b 1
+                        )
+                        
+                        findstr /i "OK" qg_result.json
+                        if %errorlevel% equ 0 (
+                            echo Quality Gate PASSED!
+                            goto quality_gate_success
+                        )
+                        
+                        echo Quality gate still processing, waiting 30 seconds...
+                        ping 127.0.0.1 -n 31 > nul
+                        goto check_quality_gate
+                        
+                        :quality_gate_success
+                        echo Quality Gate passed successfully!
+                    '''
                 }
             }
         }
