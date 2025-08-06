@@ -39,7 +39,7 @@ pipeline {
                             --network %DOCKER_NETWORK% ^
                             -p %SONARQUBE_PORT%:9000 ^
                             -e SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true ^
-                            sonarqube:latest
+                            sonarqube:lts
                         
                         echo Waiting for SonarQube to start...
                         timeout /t 60
