@@ -169,7 +169,7 @@ pipeline {
             post {
                 always {
                     // Archive test results
-                    publishTestResults testResultsPattern: 'phpunit-report.xml'
+                    junit testResults: 'phpunit-report.xml', allowEmptyResults: true
                     // Archive coverage reports for SonarQube
                     archiveArtifacts artifacts: 'coverage.xml', fingerprint: true
                 }
