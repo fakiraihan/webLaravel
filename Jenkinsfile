@@ -52,16 +52,23 @@ pipeline {
                             -p %SONARQUBE_PORT%:9000 ^
                             -e SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true ^
                             -e SONAR_JDBC_URL=jdbc:h2:mem:sonar ^
+                            -e SONAR_SEARCH_JAVAADDITIONALOPTS="-Dnode.store.allow_mmap=false" ^
                             -v sonarqube_data:/opt/sonarqube/data ^
                             -v sonarqube_logs:/opt/sonarqube/logs ^
                             -v sonarqube_extensions:/opt/sonarqube/extensions ^
                             sonarqube:lts
                         
-                        echo Waiting for SonarQube to initialize...
-                        timeout /t 90
+                        echo SonarQube container started, it will take a few minutes to initialize...
+                        echo Waiting 2 minutes for initial startup...
+                        ping 127.0.0.1 -n 121 > nul
                         
                         echo Verifying SonarQube container is running...
-                        docker ps | findstr %SONARQUBE_CONTAINER% || (echo SonarQube container failed to start && exit /b 1)
+                        docker ps | findstr %SONARQUBE_CONTAINER% || (
+                            echo SonarQube container failed to start
+                            echo Container logs:
+                            docker logs %SONARQUBE_CONTAINER%
+                            exit /b 1
+                        )
                     '''
                 }
             }
@@ -76,20 +83,30 @@ pipeline {
                         set /a count=0
                         :wait_sonar
                         set /a count+=1
-                        if %count% GTR 30 (
-                            echo SonarQube failed to start after 5 minutes
+                        if %count% GTR 60 (
+                            echo SonarQube failed to start after 10 minutes
+                            echo Showing SonarQube container logs:
                             docker logs %SONARQUBE_CONTAINER%
+                            echo Checking container status:
+                            docker ps -a | findstr %SONARQUBE_CONTAINER%
                             exit /b 1
                         )
-                        curl -f http://localhost:%SONARQUBE_PORT%/api/system/health 2>nul && goto sonar_ready
-                        echo Waiting for SonarQube... attempt %count%/30
-                        timeout /t 10
+                        
+                        echo Checking SonarQube health... attempt %count%/60
+                        curl -f http://localhost:%SONARQUBE_PORT%/api/system/health 2>nul
+                        if %errorlevel% equ 0 goto sonar_ready
+                        
+                        echo SonarQube not ready yet, waiting 10 seconds...
+                        ping 127.0.0.1 -n 11 > nul
                         goto wait_sonar
+                        
                         :sonar_ready
                         echo SonarQube is ready and healthy!
                         
                         echo Verifying SonarQube API is accessible...
                         curl -f http://localhost:%SONARQUBE_PORT%/api/system/status
+                        
+                        echo SonarQube verification completed successfully!
                     '''
                 }
             }
