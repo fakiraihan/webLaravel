@@ -45,20 +45,15 @@ pipeline {
                         docker pull sonarsource/sonar-scanner-cli:latest
                         docker pull zaproxy/zap-stable
                         
-                        echo Starting SonarQube container...
+                        echo Starting SonarQube container (simple mode)...
                         docker run -d ^
                             --name %SONARQUBE_CONTAINER% ^
                             --network %DOCKER_NETWORK% ^
                             -p %SONARQUBE_PORT%:9000 ^
-                            -e SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true ^
-                            -e SONAR_JDBC_URL=jdbc:h2:./data/sonar ^
-                            -v sonarqube_data:/opt/sonarqube/data ^
-                            -v sonarqube_logs:/opt/sonarqube/logs ^
-                            -v sonarqube_extensions:/opt/sonarqube/extensions ^
                             sonarqube:lts
                         
-                        echo SonarQube container started, waiting 30 seconds...
-                        ping 127.0.0.1 -n 31 > nul
+                        echo SonarQube container started, waiting 20 seconds...
+                        ping 127.0.0.1 -n 21 > nul
                         
                         echo Verifying SonarQube container is running...
                         docker ps | findstr %SONARQUBE_CONTAINER% || (
