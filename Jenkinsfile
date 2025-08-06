@@ -134,7 +134,7 @@ pipeline {
                     bat '''
                         if not exist database mkdir database
                         if exist database\\database.sqlite del database\\database.sqlite
-                        echo. > database\\database.sqlite
+                        php -r "touch('database/database.sqlite');"
                     '''
                     
                     echo 'Creating fresh database...'
