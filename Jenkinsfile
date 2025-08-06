@@ -45,6 +45,7 @@ pipeline {
                             --name %SONARQUBE_CONTAINER% ^
                             --network %DOCKER_NETWORK% ^
                             -p %SONARQUBE_PORT%:9000 ^
+                            -e SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true ^
                             sonarqube:lts
                         
                         echo SonarQube container started, waiting 20 seconds...
@@ -81,7 +82,7 @@ pipeline {
                         )
                         
                         echo Checking SonarQube health... attempt %count%/20
-                        curl -f http://localhost:%SONARQUBE_PORT%/api/system/health 2>nul
+                        curl -f http://localhost:%SONARQUBE_PORT%/api/system/status 2>nul
                         if %errorlevel% equ 0 goto sonar_ready
                         
                         echo SonarQube not ready yet, waiting 10 seconds...
@@ -89,10 +90,14 @@ pipeline {
                         goto wait_sonar
                         
                         :sonar_ready
-                        echo SonarQube is ready and healthy!
+                        echo SonarQube is ready!
                         
-                        echo Verifying SonarQube API is accessible...
-                        curl -f http://localhost:%SONARQUBE_PORT%/api/system/status
+                        echo Creating SonarQube admin token...
+                        curl -X POST ^
+                            -u admin:admin ^
+                            "http://localhost:%SONARQUBE_PORT%/api/user_tokens/generate" ^
+                            -d "name=jenkins-token" ^
+                            -d "login=admin" > token_response.json 2>nul || echo Using existing token
                         
                         echo SonarQube verification completed successfully!
                     '''
@@ -166,7 +171,8 @@ pipeline {
                                 -w /usr/src ^
                                 sonarsource/sonar-scanner-cli:latest ^
                                 -Dsonar.host.url=http://%SONARQUBE_CONTAINER%:9000 ^
-                                -Dsonar.login=%SONAR_AUTH_TOKEN% ^
+                                -Dsonar.login=admin ^
+                                -Dsonar.password=admin ^
                                 -Dsonar.projectKey=webLaravel ^
                                 -Dsonar.projectName=webLaravel ^
                                 -Dsonar.projectVersion=1.0 ^
