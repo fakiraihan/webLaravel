@@ -40,12 +40,16 @@ pipeline {
                         docker stop %ZAP_CONTAINER% 2>nul || echo ZAP container not running
                         docker rm %ZAP_CONTAINER% 2>nul || echo ZAP container not found
                         
+<<<<<<< HEAD
                         echo Pulling required Docker images...
                         docker pull sonarqube:lts
                         docker pull sonarsource/sonar-scanner-cli:latest
                         docker pull zaproxy/zap-stable
                         
                         echo Starting SonarQube container (simple mode)...
+=======
+                        echo Starting SonarQube container...
+>>>>>>> 16907cbb05b07fac04fb1632024fb8bd2aba866a
                         docker run -d ^
                             --name %SONARQUBE_CONTAINER% ^
                             --network %DOCKER_NETWORK% ^
