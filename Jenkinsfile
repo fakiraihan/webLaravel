@@ -150,7 +150,20 @@ pipeline {
             steps {
                 script {
                     echo 'Running PHPUnit tests...'
-                    bat 'vendor\\bin\\phpunit --configuration phpunit.xml --coverage-clover=coverage.xml --log-junit=phpunit-report.xml'
+                    
+                    // Run tests without coverage first
+                    def testResult = bat(script: 'vendor\\bin\\phpunit --configuration phpunit.xml --log-junit=phpunit-report.xml', returnStatus: true)
+                    if (testResult != 0) {
+                        error("Unit tests failed")
+                    }
+                    
+                    // Try to generate coverage if Xdebug/PCOV is available
+                    def coverageResult = bat(script: 'vendor\\bin\\phpunit --configuration phpunit.xml --coverage-clover=coverage.xml', returnStatus: true)
+                    if (coverageResult == 0) {
+                        echo 'Code coverage generated successfully'
+                    } else {
+                        echo 'Code coverage not available - Xdebug/PCOV not installed, continuing without coverage'
+                    }
                 }
             }
             post {
