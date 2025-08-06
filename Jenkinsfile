@@ -206,7 +206,6 @@ pipeline {
                             -Dsonar.sources=app,config,database,routes,resources ^
                             -Dsonar.exclusions=vendor/**,storage/**,bootstrap/cache/**,public/**,node_modules/**,tests/**
                     '''
-                    '''
                 }
             }
         }
