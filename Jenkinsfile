@@ -40,22 +40,25 @@ pipeline {
                         docker stop %ZAP_CONTAINER% 2>nul || echo ZAP container not running
                         docker rm %ZAP_CONTAINER% 2>nul || echo ZAP container not found
                         
+                        echo Pulling required Docker images...
+                        docker pull sonarqube:lts
+                        docker pull sonarsource/sonar-scanner-cli:latest
+                        docker pull zaproxy/zap-stable
+                        
                         echo Starting SonarQube container...
                         docker run -d ^
                             --name %SONARQUBE_CONTAINER% ^
                             --network %DOCKER_NETWORK% ^
                             -p %SONARQUBE_PORT%:9000 ^
                             -e SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true ^
-                            -e SONAR_JDBC_URL=jdbc:h2:mem:sonar ^
-                            -e SONAR_SEARCH_JAVAADDITIONALOPTS="-Dnode.store.allow_mmap=false" ^
+                            -e SONAR_JDBC_URL=jdbc:h2:./data/sonar ^
                             -v sonarqube_data:/opt/sonarqube/data ^
                             -v sonarqube_logs:/opt/sonarqube/logs ^
                             -v sonarqube_extensions:/opt/sonarqube/extensions ^
                             sonarqube:lts
                         
-                        echo SonarQube container started, it will take a few minutes to initialize...
-                        echo Waiting 2 minutes for initial startup...
-                        ping 127.0.0.1 -n 121 > nul
+                        echo SonarQube container started, waiting 30 seconds...
+                        ping 127.0.0.1 -n 31 > nul
                         
                         echo Verifying SonarQube container is running...
                         docker ps | findstr %SONARQUBE_CONTAINER% || (
@@ -78,8 +81,8 @@ pipeline {
                         set /a count=0
                         :wait_sonar
                         set /a count+=1
-                        if %count% GTR 60 (
-                            echo SonarQube failed to start after 10 minutes
+                        if %count% GTR 20 (
+                            echo SonarQube failed to start after 3.5 minutes
                             echo Showing SonarQube container logs:
                             docker logs %SONARQUBE_CONTAINER%
                             echo Checking container status:
@@ -87,7 +90,7 @@ pipeline {
                             exit /b 1
                         )
                         
-                        echo Checking SonarQube health... attempt %count%/60
+                        echo Checking SonarQube health... attempt %count%/20
                         curl -f http://localhost:%SONARQUBE_PORT%/api/system/health 2>nul
                         if %errorlevel% equ 0 goto sonar_ready
                         
