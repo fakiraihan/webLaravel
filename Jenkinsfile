@@ -31,7 +31,19 @@ pipeline {
                 script {
                     echo 'Setting up Docker network and containers...'
                     bat '''
+                        echo Creating Docker network...
                         docker network create %DOCKER_NETWORK% 2>nul || echo Network already exists
+                        
+                        echo Cleaning up any existing containers...
+                        docker stop %SONARQUBE_CONTAINER% 2>nul || echo SonarQube container not running
+                        docker rm %SONARQUBE_CONTAINER% 2>nul || echo SonarQube container not found
+                        docker stop %ZAP_CONTAINER% 2>nul || echo ZAP container not running
+                        docker rm %ZAP_CONTAINER% 2>nul || echo ZAP container not found
+                        
+                        echo Pulling required Docker images...
+                        docker pull sonarqube:lts
+                        docker pull sonarsource/sonar-scanner-cli:latest
+                        docker pull zaproxy/zap-stable
                         
                         echo Starting SonarQube container...
                         docker run -d ^
@@ -39,17 +51,45 @@ pipeline {
                             --network %DOCKER_NETWORK% ^
                             -p %SONARQUBE_PORT%:9000 ^
                             -e SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true ^
+                            -e SONAR_JDBC_URL=jdbc:h2:mem:sonar ^
+                            -v sonarqube_data:/opt/sonarqube/data ^
+                            -v sonarqube_logs:/opt/sonarqube/logs ^
+                            -v sonarqube_extensions:/opt/sonarqube/extensions ^
                             sonarqube:lts
                         
-                        echo Waiting for SonarQube to start...
-                        timeout /t 60
+                        echo Waiting for SonarQube to initialize...
+                        timeout /t 90
                         
-                        echo Starting OWASP ZAP container...
-                        docker run -d ^
-                            --name %ZAP_CONTAINER% ^
-                            --network %DOCKER_NETWORK% ^
-                            -p %ZAP_PORT%:8080 ^
-                            -i zaproxy/zap-stable zap-baseline.py -t %APP_URL% || echo ZAP container prepared
+                        echo Verifying SonarQube container is running...
+                        docker ps | findstr %SONARQUBE_CONTAINER% || (echo SonarQube container failed to start && exit /b 1)
+                    '''
+                }
+            }
+        }
+
+        stage('Verify Docker Services') {
+            steps {
+                script {
+                    echo 'Verifying Docker services are ready...'
+                    bat '''
+                        echo Checking SonarQube health...
+                        set /a count=0
+                        :wait_sonar
+                        set /a count+=1
+                        if %count% GTR 30 (
+                            echo SonarQube failed to start after 5 minutes
+                            docker logs %SONARQUBE_CONTAINER%
+                            exit /b 1
+                        )
+                        curl -f http://localhost:%SONARQUBE_PORT%/api/system/health 2>nul && goto sonar_ready
+                        echo Waiting for SonarQube... attempt %count%/30
+                        timeout /t 10
+                        goto wait_sonar
+                        :sonar_ready
+                        echo SonarQube is ready and healthy!
+                        
+                        echo Verifying SonarQube API is accessible...
+                        curl -f http://localhost:%SONARQUBE_PORT%/api/system/status
                     '''
                 }
             }
@@ -111,20 +151,10 @@ pipeline {
                 script {
                     echo 'Starting SonarQube static analysis with Docker...'
                     
-                    // Wait for SonarQube to be ready
-                    bat '''
-                        echo Waiting for SonarQube to be ready...
-                        :wait_sonar
-                        curl -f http://localhost:%SONARQUBE_PORT%/api/system/status && goto sonar_ready
-                        timeout /t 10
-                        goto wait_sonar
-                        :sonar_ready
-                        echo SonarQube is ready!
-                    '''
-                    
                     // Run SonarQube analysis using Docker
                     withSonarQubeEnv('SonarQube') {
                         bat '''
+                            echo Running SonarQube scanner in Docker container...
                             docker run --rm ^
                                 --network %DOCKER_NETWORK% ^
                                 -v "%CD%":/usr/src ^
