@@ -282,35 +282,79 @@ pipeline {
                     // Create reports directory
                     bat 'mkdir reports 2>nul || echo Reports directory exists'
                     
-                    // Run ZAP baseline scan
+                    // Create ZAP authentication configuration
                     bat '''
-                        echo Running ZAP Baseline Scan...
+                        echo Creating ZAP authentication configuration...
+                        echo # ZAP Authentication Configuration > reports\\auth.conf
+                        echo env.context=webLaravel >> reports\\auth.conf
+                        echo env.user=admin >> reports\\auth.conf
+                        echo env.password=password >> reports\\auth.conf
+                        echo env.loginUrl=http://host.docker.internal:8080/login >> reports\\auth.conf
+                        echo env.loggedInIndicator=\\Q/logout\\E >> reports\\auth.conf
+                        echo env.loggedOutIndicator=\\Q/login\\E >> reports\\auth.conf
+                    '''
+                    
+                    // Create a simple login script for ZAP
+                    bat '''
+                        echo Creating authentication script...
+                        (
+                        echo {
+                        echo   "authentication": {
+                        echo     "method": "form",
+                        echo     "loginUrl": "http://host.docker.internal:8080/login",
+                        echo     "loginRequestData": "username=admin&password=password",
+                        echo     "loggedInRegex": ".*logout.*"
+                        echo   }
+                        echo }
+                        ) > reports\\auth.json
+                    '''
+                    
+                    // Run ZAP baseline scan with authentication
+                    bat '''
+                        echo Running ZAP Baseline Scan with Authentication...
                         docker run -v "%CD%\\reports":/zap/wrk/:rw ^
                             -t zaproxy/zap-stable zap-baseline.py ^
                             -t http://host.docker.internal:8080 ^
+                            -c auth.conf ^
                             -g gen.conf ^
                             -J zap-baseline-report.json ^
-                            -r zap-baseline-report.html || echo Baseline scan completed with findings
+                            -r zap-baseline-report.html ^
+                            -a || echo Baseline scan completed with findings
                     '''
                     
-                    // Run ZAP full scan for more comprehensive testing
+                    // Run ZAP full scan with authentication
                     bat '''
-                        echo Running ZAP Full Scan...
+                        echo Running ZAP Full Scan with Authentication...
                         docker run -v "%CD%\\reports":/zap/wrk/:rw ^
                             -t zaproxy/zap-stable zap-full-scan.py ^
                             -t http://host.docker.internal:8080 ^
+                            -c auth.conf ^
                             -g gen.conf ^
                             -J zap-full-report.json ^
-                            -r zap-full-report.html || echo Full scan completed with findings
+                            -r zap-full-report.html ^
+                            -a || echo Full scan completed with findings
                     '''
                     
-                    // Run ZAP API scan if you have API endpoints
+                    // Also run a spider scan to discover more endpoints after login
                     bat '''
-                        echo Running ZAP API Scan...
+                        echo Running ZAP Spider Scan with Authentication...
+                        docker run -v "%CD%\\reports":/zap/wrk/:rw ^
+                            -t zaproxy/zap-stable zap-baseline.py ^
+                            -t http://host.docker.internal:8080 ^
+                            -c auth.conf ^
+                            -s ^
+                            -J zap-spider-report.json ^
+                            -r zap-spider-report.html || echo Spider scan completed
+                    '''
+                    
+                    // Run ZAP API scan with authentication if you have API endpoints
+                    bat '''
+                        echo Running ZAP API Scan with Authentication...
                         docker run -v "%CD%\\reports":/zap/wrk/:rw ^
                             -t zaproxy/zap-stable zap-api-scan.py ^
                             -t http://host.docker.internal:8080/api ^
                             -f openapi ^
+                            -c auth.conf ^
                             -J zap-api-report.json ^
                             -r zap-api-report.html || echo API scan completed
                     '''
@@ -363,6 +407,15 @@ pipeline {
                             reportDir: '.',
                             reportFiles: 'zap-full-report.html',
                             reportName: 'ZAP Full Security Report'
+                        ])
+                        
+                        publishHTML([
+                            allowMissing: true,
+                            alwaysLinkToLastBuild: false,
+                            keepAll: true,
+                            reportDir: '.',
+                            reportFiles: 'zap-spider-report.html',
+                            reportName: 'ZAP Spider Security Report'
                         ])
                     }
                 }
