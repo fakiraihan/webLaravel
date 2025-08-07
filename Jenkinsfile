@@ -321,9 +321,26 @@ pipeline {
                     script {
                         // Copy reports to workspace root for archiving
                         bat '''
-                            copy reports\\*.html . 2>nul || echo No HTML reports found
-                            copy reports\\*.json . 2>nul || echo No JSON reports found
-                            copy reports\\*.xml . 2>nul || echo No XML reports found
+                            if exist reports\\*.html (
+                                copy reports\\*.html . >nul 2>&1
+                                echo HTML reports copied successfully
+                            ) else (
+                                echo No HTML reports found
+                            )
+                            
+                            if exist reports\\*.json (
+                                copy reports\\*.json . >nul 2>&1
+                                echo JSON reports copied successfully
+                            ) else (
+                                echo No JSON reports found
+                            )
+                            
+                            if exist reports\\*.xml (
+                                copy reports\\*.xml . >nul 2>&1
+                                echo XML reports copied successfully
+                            ) else (
+                                echo No XML reports found
+                            )
                         '''
                         
                         // Archive ZAP reports
