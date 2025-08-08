@@ -192,13 +192,29 @@ pipeline {
                     
                     // Run SonarQube analysis using Docker (without withSonarQubeEnv)
                     bat '''
-                        echo Testing SonarQube connectivity first...
-                        curl -u admin:admin http://%SONARQUBE_CONTAINER%:9000/api/system/status
-                        if %errorlevel% neq 0 (
-                            echo SonarQube is not accessible from scanner container
-                            echo Trying localhost instead...
-                            curl -u admin:admin http://localhost:%SONARQUBE_PORT%/api/system/status
+                        echo Waiting for SonarQube to be fully ready...
+                        set /a count=0
+                        :wait_sonar_ready
+                        set /a count+=1
+                        if %count% GTR 30 (
+                            echo SonarQube failed to become ready after 10 minutes
+                            echo Showing SonarQube container logs:
+                            docker logs %SONARQUBE_CONTAINER%
+                            exit /b 1
                         )
+                        
+                        echo Checking SonarQube status... attempt %count%/30
+                        curl -s -u admin:admin http://localhost:%SONARQUBE_PORT%/api/system/status > sonar_status.json 2>nul
+                        findstr "UP" sonar_status.json >nul
+                        if %errorlevel% equ 0 goto sonar_fully_ready
+                        
+                        echo SonarQube still starting, waiting 20 seconds...
+                        ping 127.0.0.1 -n 21 > nul
+                        goto wait_sonar_ready
+                        
+                        :sonar_fully_ready
+                        echo SonarQube is fully ready!
+                        type sonar_status.json
                         
                         echo Running SonarQube scanner in Docker container...
                         docker run --rm ^
@@ -213,8 +229,7 @@ pipeline {
                             -Dsonar.projectName=webLaravel ^
                             -Dsonar.projectVersion=1.0 ^
                             -Dsonar.sources=app,config,database,routes,resources ^
-                            -Dsonar.exclusions=vendor/**,storage/**,bootstrap/cache/**,public/**,node_modules/**,tests/** ^
-                            -X
+                            -Dsonar.exclusions=vendor/**,storage/**,bootstrap/cache/**,public/**,node_modules/**,tests/**
                     '''
                 }
             }
