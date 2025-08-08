@@ -221,7 +221,7 @@ pipeline {
                             --network %DOCKER_NETWORK% ^
                             -v "%CD%":/usr/src ^
                             -w /usr/src ^
-                            sonarsource/sonar-scanner-cli:4.8 ^
+                            sonarsource/sonar-scanner-cli:latest ^
                             -Dsonar.host.url=http://host.docker.internal:%SONARQUBE_PORT% ^
                             -Dsonar.login=admin ^
                             -Dsonar.password=admin ^
