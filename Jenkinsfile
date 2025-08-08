@@ -46,7 +46,7 @@ pipeline {
                             --network %DOCKER_NETWORK% ^
                             -p %SONARQUBE_PORT%:9000 ^
                             -e SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true ^
-                            sonarqube:lts
+                            sonarqube:latest
                         
                         echo SonarQube container started, waiting 20 seconds...
                         ping 127.0.0.1 -n 21 > nul
@@ -196,7 +196,7 @@ pipeline {
                             --network %DOCKER_NETWORK% ^
                             -v "%CD%":/usr/src ^
                             -w /usr/src ^
-                            sonarsource/sonar-scanner-cli:4.8 ^
+                            sonarsource/sonar-scanner-cli:latest ^
                             -Dsonar.host.url=http://%SONARQUBE_CONTAINER%:9000 ^
                             -Dsonar.login=admin ^
                             -Dsonar.password=admin ^
@@ -280,7 +280,7 @@ pipeline {
                     echo 'Starting OWASP ZAP dynamic security testing with Docker...'
                     
                     // Create reports directory
-                    bat 'mkdir reports 2>nul || echo Reports directory exists'
+                    bat 'if not exist reports mkdir reports'
                     
                     // Create ZAP authentication configuration
                     bat '''
@@ -290,8 +290,9 @@ pipeline {
                         echo env.user=admin >> reports\\auth.conf
                         echo env.password=password >> reports\\auth.conf
                         echo env.loginUrl=http://host.docker.internal:8080/login >> reports\\auth.conf
-                        echo env.loggedInIndicator=\\Q/logout\\E >> reports\\auth.conf
-                        echo env.loggedOutIndicator=\\Q/login\\E >> reports\\auth.conf
+                        echo env.loggedInIndicator=\\Q/admin\\E >> reports\\auth.conf
+                        echo env.loggedOutIndicator=\\Qvalue="Login"\\E >> reports\\auth.conf
+                        echo env.loginRequestData=username={%%username%%}^&password={%%password%%}^&_token={%%_token%%} >> reports\\auth.conf
                     '''
                     
                     // Create a simple login script for ZAP
@@ -302,8 +303,12 @@ pipeline {
                         echo   "authentication": {
                         echo     "method": "form",
                         echo     "loginUrl": "http://host.docker.internal:8080/login",
-                        echo     "loginRequestData": "username=admin&password=password",
-                        echo     "loggedInRegex": ".*logout.*"
+                        echo     "usernameParameter": "username",
+                        echo     "passwordParameter": "password",
+                        echo     "username": "admin",
+                        echo     "password": "password",
+                        echo     "loggedInRegex": ".*admin.*",
+                        echo     "loggedOutRegex": ".*Login.*"
                         echo   }
                         echo }
                         ) > reports\\auth.json
@@ -315,11 +320,10 @@ pipeline {
                         docker run -v "%CD%\\reports":/zap/wrk/:rw ^
                             -t zaproxy/zap-stable zap-baseline.py ^
                             -t http://host.docker.internal:8080 ^
-                            -c auth.conf ^
                             -g gen.conf ^
                             -J zap-baseline-report.json ^
                             -r zap-baseline-report.html ^
-                            -a || echo Baseline scan completed with findings
+                            --hook-script=/zap/wrk/auth.json || echo Baseline scan completed with findings
                     '''
                     
                     // Run ZAP full scan with authentication
@@ -328,11 +332,10 @@ pipeline {
                         docker run -v "%CD%\\reports":/zap/wrk/:rw ^
                             -t zaproxy/zap-stable zap-full-scan.py ^
                             -t http://host.docker.internal:8080 ^
-                            -c auth.conf ^
                             -g gen.conf ^
                             -J zap-full-report.json ^
                             -r zap-full-report.html ^
-                            -a || echo Full scan completed with findings
+                            --hook-script=/zap/wrk/auth.json || echo Full scan completed with findings
                     '''
                     
                     // Also run a spider scan to discover more endpoints after login
@@ -341,10 +344,10 @@ pipeline {
                         docker run -v "%CD%\\reports":/zap/wrk/:rw ^
                             -t zaproxy/zap-stable zap-baseline.py ^
                             -t http://host.docker.internal:8080 ^
-                            -c auth.conf ^
                             -s ^
                             -J zap-spider-report.json ^
-                            -r zap-spider-report.html || echo Spider scan completed
+                            -r zap-spider-report.html ^
+                            --hook-script=/zap/wrk/auth.json || echo Spider scan completed
                     '''
                     
                     // Run ZAP API scan with authentication if you have API endpoints
