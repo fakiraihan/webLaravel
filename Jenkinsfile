@@ -192,6 +192,7 @@ pipeline {
                     
                     // Run SonarQube analysis using Docker (without withSonarQubeEnv)
                     bat '''
+                        setlocal enabledelayedexpansion
                         echo Waiting for SonarQube to be fully ready...
                         set /a count=0
                         :wait_sonar_ready
@@ -216,7 +217,17 @@ pipeline {
                         echo SonarQube is fully ready!
                         type sonar_status.json
                         
+                        echo Testing SonarQube authentication...
+                        curl -u admin:admin http://localhost:%SONARQUBE_PORT%/api/authentication/validate
+                        if %errorlevel% neq 0 (
+                            echo Default admin credentials failed, trying to reset password...
+                            echo Checking SonarQube logs for any setup instructions:
+                            docker logs %SONARQUBE_CONTAINER% | findstr /i "password\|token\|admin\|setup"
+                        )
+                        
                         echo Running SonarQube scanner in Docker container...
+                        
+                        echo Trying with username/password first...
                         docker run --rm ^
                             --network %DOCKER_NETWORK% ^
                             -v "%CD%":/usr/src ^
@@ -230,6 +241,42 @@ pipeline {
                             -Dsonar.projectVersion=1.0 ^
                             -Dsonar.sources=app,config,database,routes,resources ^
                             -Dsonar.exclusions=vendor/**,storage/**,bootstrap/cache/**,public/**,node_modules/**,tests/**
+                        
+                        if %errorlevel% neq 0 (
+                            echo Username/password failed, trying with token...
+                            echo Creating a user token via API...
+                            
+                            REM Try to create a token using curl
+                            curl -u admin:admin -X POST "http://localhost:%SONARQUBE_PORT%/api/user_tokens/generate?name=jenkins-token" > token_response.txt 2>nul
+                            
+                            REM Extract token from response (this is a simplified approach)
+                            for /f "tokens=2 delims=:" %%a in ('findstr "token" token_response.txt') do (
+                                set TOKEN=%%a
+                                set TOKEN=!TOKEN:"=!
+                                set TOKEN=!TOKEN:}=!
+                                set TOKEN=!TOKEN: =!
+                            )
+                            
+                            if defined TOKEN (
+                                echo Using generated token: !TOKEN!
+                                docker run --rm ^
+                                    --network %DOCKER_NETWORK% ^
+                                    -v "%CD%":/usr/src ^
+                                    -w /usr/src ^
+                                    sonarsource/sonar-scanner-cli:latest ^
+                                    -Dsonar.host.url=http://host.docker.internal:%SONARQUBE_PORT% ^
+                                    -Dsonar.token=!TOKEN! ^
+                                    -Dsonar.projectKey=webLaravel ^
+                                    -Dsonar.projectName=webLaravel ^
+                                    -Dsonar.projectVersion=1.0 ^
+                                    -Dsonar.sources=app,config,database,routes,resources ^
+                                    -Dsonar.exclusions=vendor/**,storage/**,bootstrap/cache/**,public/**,node_modules/**,tests/**
+                            ) else (
+                                echo Failed to generate token, manual setup may be required
+                                echo Please check SonarQube at http://localhost:%SONARQUBE_PORT%
+                                exit /b 1
+                            )
+                        )
                     '''
                 }
             }
