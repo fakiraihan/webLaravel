@@ -192,20 +192,29 @@ pipeline {
                     
                     // Run SonarQube analysis using Docker (without withSonarQubeEnv)
                     bat '''
+                        echo Testing SonarQube connectivity first...
+                        curl -u admin:admin http://%SONARQUBE_CONTAINER%:9000/api/system/status
+                        if %errorlevel% neq 0 (
+                            echo SonarQube is not accessible from scanner container
+                            echo Trying localhost instead...
+                            curl -u admin:admin http://localhost:%SONARQUBE_PORT%/api/system/status
+                        )
+                        
                         echo Running SonarQube scanner in Docker container...
                         docker run --rm ^
                             --network %DOCKER_NETWORK% ^
                             -v "%CD%":/usr/src ^
                             -w /usr/src ^
                             sonarsource/sonar-scanner-cli:4.8 ^
-                            -Dsonar.host.url=http://%SONARQUBE_CONTAINER%:9000 ^
+                            -Dsonar.host.url=http://host.docker.internal:%SONARQUBE_PORT% ^
                             -Dsonar.login=admin ^
                             -Dsonar.password=admin ^
                             -Dsonar.projectKey=webLaravel ^
                             -Dsonar.projectName=webLaravel ^
                             -Dsonar.projectVersion=1.0 ^
                             -Dsonar.sources=app,config,database,routes,resources ^
-                            -Dsonar.exclusions=vendor/**,storage/**,bootstrap/cache/**,public/**,node_modules/**,tests/**
+                            -Dsonar.exclusions=vendor/**,storage/**,bootstrap/cache/**,public/**,node_modules/**,tests/** ^
+                            -X
                     '''
                 }
             }
