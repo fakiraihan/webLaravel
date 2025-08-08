@@ -93,11 +93,7 @@ pipeline {
                         echo SonarQube is ready!
                         
                         echo Creating SonarQube admin token...
-                        curl -X POST ^
-                            -u admin:admin ^
-                            "http://localhost:%SONARQUBE_PORT%/api/user_tokens/generate" ^
-                            -d "name=jenkins-token" ^
-                            -d "login=admin" > token_response.json 2>nul || echo Using existing token
+                        for /f "tokens=*" %%i in ('curl -s -X POST -u admin:admin "http://localhost:%SONARQUBE_PORT%/api/user_tokens/generate" -d "name=jenkins-token"') do set TOKEN_RESPONSE=%%i
                         
                         echo SonarQube verification completed successfully!
                     '''
@@ -198,8 +194,7 @@ pipeline {
                             -w /usr/src ^
                             sonarsource/sonar-scanner-cli:latest ^
                             -Dsonar.host.url=http://%SONARQUBE_CONTAINER%:9000 ^
-                            -Dsonar.login=admin ^
-                            -Dsonar.password=admin ^
+                            -Dsonar.token=squ_83c259ddb8961e3512ab2c83e7e8eb91b3f80c3e ^
                             -Dsonar.projectKey=webLaravel ^
                             -Dsonar.projectName=webLaravel ^
                             -Dsonar.projectVersion=1.0 ^
