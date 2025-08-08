@@ -222,7 +222,7 @@ pipeline {
                         if %errorlevel% neq 0 (
                             echo Default admin credentials failed, trying to reset password...
                             echo Checking SonarQube logs for any setup instructions:
-                            docker logs %SONARQUBE_CONTAINER% | findstr /i "password\|token\|admin\|setup"
+                            docker logs %SONARQUBE_CONTAINER% | findstr /i "password token admin setup"
                         )
                         
                         echo Running SonarQube scanner in Docker container...
