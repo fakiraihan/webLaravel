@@ -252,20 +252,20 @@ pipeline {
                             REM Extract token from response (this is a simplified approach)
                             for /f "tokens=2 delims=:" %%a in ('findstr "token" token_response.txt') do (
                                 set TOKEN=%%a
-                                set TOKEN=!TOKEN:"=!
-                                set TOKEN=!TOKEN:}=!
-                                set TOKEN=!TOKEN: =!
+                                set TOKEN=%%TOKEN:"=%%
+                                set TOKEN=%%TOKEN:}=%%
+                                set TOKEN=%%TOKEN: =%%
                             )
                             
                             if defined TOKEN (
-                                echo Using generated token: !TOKEN!
+                                echo Using generated token: %%TOKEN%%
                                 docker run --rm ^
                                     --network %DOCKER_NETWORK% ^
                                     -v "%CD%":/usr/src ^
                                     -w /usr/src ^
                                     sonarsource/sonar-scanner-cli:latest ^
                                     -Dsonar.host.url=http://host.docker.internal:%SONARQUBE_PORT% ^
-                                    -Dsonar.token=!TOKEN! ^
+                                    -Dsonar.token=%%TOKEN%% ^
                                     -Dsonar.projectKey=webLaravel ^
                                     -Dsonar.projectName=webLaravel ^
                                     -Dsonar.projectVersion=1.0 ^
