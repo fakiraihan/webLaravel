@@ -192,21 +192,12 @@ pipeline {
                     
                     // Run SonarQube analysis using Docker (without withSonarQubeEnv)
                     bat '''
-                        echo Extracting SonarQube token...
-                        for /f "tokens=2 delims=:" %%a in ('findstr "token" token_response.json') do (
-                            set TOKEN_RAW=%%a
-                            set TOKEN=!TOKEN_RAW:"=!
-                            set TOKEN=!TOKEN:,=!
-                            set TOKEN=!TOKEN: =!
-                        )
-                        
                         echo Running SonarQube scanner in Docker container...
                         docker run --rm ^
                             --network %DOCKER_NETWORK% ^
                             -v "%CD%":/usr/src ^
                             -w /usr/src ^
-                            -e SONAR_TOKEN=admin ^
-                            sonarsource/sonar-scanner-cli:latest ^
+                            sonarsource/sonar-scanner-cli:4.8 ^
                             -Dsonar.host.url=http://%SONARQUBE_CONTAINER%:9000 ^
                             -Dsonar.login=admin ^
                             -Dsonar.password=admin ^
