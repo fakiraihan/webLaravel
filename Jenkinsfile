@@ -93,7 +93,12 @@ pipeline {
                         echo SonarQube is ready!
                         
                         echo Creating SonarQube admin token...
-                        for /f "tokens=*" %%i in ('curl -s -X POST -u admin:admin "http://localhost:%SONARQUBE_PORT%/api/user_tokens/generate" -d "name=jenkins-token"') do set TOKEN_RESPONSE=%%i
+                        curl -s -X POST ^
+                            -u admin:admin ^
+                            "http://localhost:%SONARQUBE_PORT%/api/user_tokens/generate" ^
+                            -d "name=jenkins-pipeline-token" > token_response.json 2>nul
+                        
+                        echo Token generated successfully!
                         
                         echo SonarQube verification completed successfully!
                     '''
@@ -187,14 +192,24 @@ pipeline {
                     
                     // Run SonarQube analysis using Docker (without withSonarQubeEnv)
                     bat '''
+                        echo Extracting SonarQube token...
+                        for /f "tokens=2 delims=:" %%a in ('findstr "token" token_response.json') do (
+                            set TOKEN_RAW=%%a
+                            set TOKEN=!TOKEN_RAW:"=!
+                            set TOKEN=!TOKEN:,=!
+                            set TOKEN=!TOKEN: =!
+                        )
+                        
                         echo Running SonarQube scanner in Docker container...
                         docker run --rm ^
                             --network %DOCKER_NETWORK% ^
                             -v "%CD%":/usr/src ^
                             -w /usr/src ^
+                            -e SONAR_TOKEN=admin ^
                             sonarsource/sonar-scanner-cli:latest ^
                             -Dsonar.host.url=http://%SONARQUBE_CONTAINER%:9000 ^
-                            -Dsonar.token=squ_83c259ddb8961e3512ab2c83e7e8eb91b3f80c3e ^
+                            -Dsonar.login=admin ^
+                            -Dsonar.password=admin ^
                             -Dsonar.projectKey=webLaravel ^
                             -Dsonar.projectName=webLaravel ^
                             -Dsonar.projectVersion=1.0 ^
