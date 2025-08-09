@@ -7,12 +7,7 @@ pipeline {
         APP_URL = 'http://host.docker.internal:8080'
         // Docker configuration
         SONARQUBE_CONTAINER = 'sonarqube-container'
-                          REM Check if analysis is complete (status: SUCCESS or FAILED)
-                        findstr /i "SUCCESS FAILED" analysis_status.json >nul
-                        if %errorlevel% equ 0 (
-                            echo Analysis completed!
-                            goto check_final_status
-                        )ZAP_CONTAINER = 'zap-container'
+        ZAP_CONTAINER = 'zap-container'
         SONARQUBE_PORT = '9000'
         ZAP_PORT = '8080'
         // Network for containers
@@ -290,8 +285,7 @@ pipeline {
                             goto wait_analysis_complete
                         )
                         
-                        REM Check if analysis is complete (status: SUCCESS or FAILED)
-                        findstr /i "SUCCESS|FAILED" analysis_status.json >nul
+                        findstr /i "SUCCESS FAILED" analysis_status.json >nul
                         if %errorlevel% equ 0 (
                             echo Analysis completed!
                             goto check_final_status
@@ -316,7 +310,6 @@ pipeline {
                         echo Quality Gate Response:
                         type qg_result.json
                         
-                        REM Check quality gate status
                         findstr /i "ERROR FAILED" qg_result.json >nul
                         if %errorlevel% equ 0 (
                             echo ❌ Quality Gate FAILED!
@@ -330,7 +323,6 @@ pipeline {
                             goto quality_gate_success
                         )
                         
-                        REM If no clear status found, show the response and continue with warning
                         echo ⚠️  Quality Gate status unclear, continuing...
                         echo Full response:
                         type qg_result.json
@@ -555,12 +547,12 @@ pipeline {
                     echo To manually remove: docker rm %SONARQUBE_CONTAINER% %ZAP_CONTAINER%
                     echo SonarQube data is stored in persistent volumes: sonarqube-data, sonarqube-logs, sonarqube-extensions
                     
-                    REM Uncomment below lines if you want to clean up containers after each run
-                    REM docker stop %SONARQUBE_CONTAINER% 2>nul || echo SonarQube container not running
-                    REM docker rm %SONARQUBE_CONTAINER% 2>nul || echo SonarQube container not found
-                    REM docker stop %ZAP_CONTAINER% 2>nul || echo ZAP container not running  
-                    REM docker rm %ZAP_CONTAINER% 2>nul || echo ZAP container not found
-                    REM docker network rm %DOCKER_NETWORK% 2>nul || echo Network not found
+                    echo Uncomment below lines if you want to clean up containers after each run
+                    echo docker stop %SONARQUBE_CONTAINER% 2^>nul ^|^| echo SonarQube container not running
+                    echo docker rm %SONARQUBE_CONTAINER% 2^>nul ^|^| echo SonarQube container not found
+                    echo docker stop %ZAP_CONTAINER% 2^>nul ^|^| echo ZAP container not running  
+                    echo docker rm %ZAP_CONTAINER% 2^>nul ^|^| echo ZAP container not found
+                    echo docker network rm %DOCKER_NETWORK% 2^>nul ^|^| echo Network not found
                 '''
                 
                 // Clean up temporary files
