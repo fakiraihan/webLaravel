@@ -231,6 +231,29 @@ pipeline {
                         echo SonarQube is fully ready!
                         type sonar_status.json
                         
+                        echo Testing SonarQube authentication with your token...
+                        curl -H "Authorization: Bearer squ_6df3138935f9d1b456dac84a494a1e437a601c4e" ^
+                            "http://localhost:%SONARQUBE_PORT%/api/authentication/validate" > auth_test.json 2>nul
+                        
+                        echo Authentication test response:
+                        type auth_test.json
+                        
+                        if %errorlevel% neq 0 (
+                            echo Token authentication failed, trying username/password...
+                            echo Testing with admin credentials:
+                            curl -u admin:Admin12345 "http://localhost:%SONARQUBE_PORT%/api/authentication/validate" > auth_test2.json 2>nul
+                            type auth_test2.json
+                            
+                            echo Generating a new token...
+                            curl -u admin:Admin12345 -X POST ^
+                                "http://localhost:%SONARQUBE_PORT%/api/user_tokens/generate?name=jenkins-new-token" > new_token.json 2>nul
+                            echo New token response:
+                            type new_token.json
+                            
+                            echo Please update your token in the pipeline
+                            exit /b 1
+                        )
+                        
                         echo Running SonarQube scanner with authentication token...
                         docker run --rm ^
                             --network %DOCKER_NETWORK% ^
@@ -238,7 +261,7 @@ pipeline {
                             -w /usr/src ^
                             sonarsource/sonar-scanner-cli:latest ^
                             -Dsonar.host.url=http://host.docker.internal:%SONARQUBE_PORT% ^
-                            -Dsonar.token=squ_1f81081978987873814451a2d3d5a0821f3e8152 ^
+                            -Dsonar.token=squ_6df3138935f9d1b456dac84a494a1e437a601c4e ^
                             -Dsonar.projectKey=webLaravel ^
                             -Dsonar.projectName=webLaravel ^
                             -Dsonar.projectVersion=1.0 ^
@@ -267,7 +290,7 @@ pipeline {
                         )
                         
                         echo Checking analysis status... attempt %count%/20
-                        curl -H "Authorization: Bearer squ_1f81081978987873814451a2d3d5a0821f3e8152" ^
+                        curl -H "Authorization: Bearer squ_6df3138935f9d1b456dac84a494a1e437a601c4e" ^
                             "http://localhost:%SONARQUBE_PORT%/api/ce/activity?component=webLaravel&ps=1" > analysis_status.json 2>nul
                         
                         if %errorlevel% neq 0 (
@@ -288,7 +311,7 @@ pipeline {
                         
                         :check_final_status
                         echo Checking Quality Gate status...
-                        curl -H "Authorization: Bearer squ_1f81081978987873814451a2d3d5a0821f3e8152" ^
+                        curl -H "Authorization: Bearer squ_6df3138935f9d1b456dac84a494a1e437a601c4e" ^
                             "http://localhost:%SONARQUBE_PORT%/api/qualitygates/project_status?projectKey=webLaravel" > qg_result.json 2>nul
                         
                         if %errorlevel% neq 0 (
