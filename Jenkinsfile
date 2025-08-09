@@ -114,15 +114,6 @@ pipeline {
                         
                         :sonar_ready
                         echo SonarQube is ready!
-                        
-                        echo Creating SonarQube admin token...
-                        curl -s -X POST ^
-                            -u admin:admin ^
-                            "http://localhost:%SONARQUBE_PORT%/api/user_tokens/generate" ^
-                            -d "name=jenkins-pipeline-token" > token_response.json 2>nul
-                        
-                        echo Token generated successfully!
-                        
                         echo SonarQube verification completed successfully!
                     '''
                 }
