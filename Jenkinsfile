@@ -354,9 +354,9 @@ pipeline {
                 script {
                     echo 'Starting Laravel application for DAST testing...'
                     bat '''
-                        start /b php artisan serve --host=0.0.0.0 --port=8080
+                        start /b php artisan serve --host=0.0.0.0 --port=8070
                         timeout /t 30
-                        curl -f http://localhost:8080 || exit /b 1
+                        curl -f http://localhost:8070 || exit /b 1
                     '''
                 }
             }
