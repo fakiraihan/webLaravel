@@ -40,7 +40,7 @@ pipeline {
                         )
                         
                         echo Docker Desktop status:
-                        findstr /i "memory\|cpu\|containers running\|images" docker_status.txt
+                        findstr /i "memory cpu containers images" docker_status.txt
                         
                         echo Cleaning up any orphaned containers...
                         docker container prune -f 2>nul || echo No orphaned containers
