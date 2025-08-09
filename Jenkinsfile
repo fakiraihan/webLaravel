@@ -34,19 +34,42 @@ pipeline {
                         echo Creating Docker network...
                         docker network create %DOCKER_NETWORK% 2>nul || echo Network already exists
                         
-                        echo Cleaning up any existing containers...
-                        docker stop %SONARQUBE_CONTAINER% 2>nul || echo SonarQube container not running
-                        docker rm %SONARQUBE_CONTAINER% 2>nul || echo SonarQube container not found
-                        docker stop %ZAP_CONTAINER% 2>nul || echo ZAP container not running
-                        docker rm %ZAP_CONTAINER% 2>nul || echo ZAP container not found
+                        echo Creating persistent volumes for SonarQube data...
+                        docker volume create sonarqube-data 2>nul || echo Volume already exists
+                        docker volume create sonarqube-logs 2>nul || echo Volume already exists
+                        docker volume create sonarqube-extensions 2>nul || echo Volume already exists
                         
-                        echo Starting SonarQube container (simple mode)...
-                        docker run -d ^
-                            --name %SONARQUBE_CONTAINER% ^
-                            --network %DOCKER_NETWORK% ^
-                            -p %SONARQUBE_PORT%:9000 ^
-                            -e SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true ^
-                            sonarqube:latest
+                        echo Checking if SonarQube container is already running...
+                        docker ps | findstr %SONARQUBE_CONTAINER% && (
+                            echo SonarQube container is already running, reusing it
+                        ) || (
+                            echo Starting new SonarQube container with persistent storage...
+                            docker stop %SONARQUBE_CONTAINER% 2>nul || echo SonarQube container not running
+                            docker rm %SONARQUBE_CONTAINER% 2>nul || echo SonarQube container not found
+                            docker run -d ^
+                                --name %SONARQUBE_CONTAINER% ^
+                                --network %DOCKER_NETWORK% ^
+                                -p %SONARQUBE_PORT%:9000 ^
+                                -v sonarqube-data:/opt/sonarqube/data ^
+                                -v sonarqube-logs:/opt/sonarqube/logs ^
+                                -v sonarqube-extensions:/opt/sonarqube/extensions ^
+                                -e SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true ^
+                                sonarqube:latest
+                        )
+                        
+                        echo Checking if ZAP container is already running...
+                        docker ps | findstr %ZAP_CONTAINER% && (
+                            echo ZAP container is already running, reusing it
+                        ) || (
+                            echo Starting new ZAP container...
+                            docker stop %ZAP_CONTAINER% 2>nul || echo ZAP container not running
+                            docker rm %ZAP_CONTAINER% 2>nul || echo ZAP container not found
+                            docker run -d ^
+                                --name %ZAP_CONTAINER% ^
+                                --network %DOCKER_NETWORK% ^
+                                -p %ZAP_PORT%:8080 ^
+                                zaproxy/zap-stable zap.sh -daemon -host 0.0.0.0 -port 8080 -config api.addrs.addr.name=.* -config api.addrs.addr.regex=true
+                        )
                         
                         echo SonarQube container started, waiting 20 seconds...
                         ping 127.0.0.1 -n 21 > nul
@@ -217,66 +240,19 @@ pipeline {
                         echo SonarQube is fully ready!
                         type sonar_status.json
                         
-                        echo Testing SonarQube authentication...
-                        curl -u admin:admin http://localhost:%SONARQUBE_PORT%/api/authentication/validate
-                        if %errorlevel% neq 0 (
-                            echo Default admin credentials failed, trying to reset password...
-                            echo Checking SonarQube logs for any setup instructions:
-                            docker logs %SONARQUBE_CONTAINER% | findstr /i "password token admin setup"
-                        )
-                        
-                        echo Running SonarQube scanner in Docker container...
-                        
-                        echo Trying with username/password first...
+                        echo Running SonarQube scanner with authentication token...
                         docker run --rm ^
                             --network %DOCKER_NETWORK% ^
                             -v "%CD%":/usr/src ^
                             -w /usr/src ^
                             sonarsource/sonar-scanner-cli:latest ^
                             -Dsonar.host.url=http://host.docker.internal:%SONARQUBE_PORT% ^
-                            -Dsonar.login=admin ^
-                            -Dsonar.password=admin ^
+                            -Dsonar.token=squ_1f81081978987873814451a2d3d5a0821f3e8152 ^
                             -Dsonar.projectKey=webLaravel ^
                             -Dsonar.projectName=webLaravel ^
                             -Dsonar.projectVersion=1.0 ^
                             -Dsonar.sources=app,config,database,routes,resources ^
                             -Dsonar.exclusions=vendor/**,storage/**,bootstrap/cache/**,public/**,node_modules/**,tests/**
-                        
-                        if %errorlevel% neq 0 (
-                            echo Username/password failed, trying with token...
-                            echo Creating a user token via API...
-                            
-                            REM Try to create a token using curl
-                            curl -u admin:admin -X POST "http://localhost:%SONARQUBE_PORT%/api/user_tokens/generate?name=jenkins-token" > token_response.txt 2>nul
-                            
-                            REM Extract token from response (this is a simplified approach)
-                            for /f "tokens=2 delims=:" %%a in ('findstr "token" token_response.txt') do (
-                                set TOKEN=%%a
-                                set TOKEN=%%TOKEN:"=%%
-                                set TOKEN=%%TOKEN:}=%%
-                                set TOKEN=%%TOKEN: =%%
-                            )
-                            
-                            if defined TOKEN (
-                                echo Using generated token: %%TOKEN%%
-                                docker run --rm ^
-                                    --network %DOCKER_NETWORK% ^
-                                    -v "%CD%":/usr/src ^
-                                    -w /usr/src ^
-                                    sonarsource/sonar-scanner-cli:latest ^
-                                    -Dsonar.host.url=http://host.docker.internal:%SONARQUBE_PORT% ^
-                                    -Dsonar.token=%%TOKEN%% ^
-                                    -Dsonar.projectKey=webLaravel ^
-                                    -Dsonar.projectName=webLaravel ^
-                                    -Dsonar.projectVersion=1.0 ^
-                                    -Dsonar.sources=app,config,database,routes,resources ^
-                                    -Dsonar.exclusions=vendor/**,storage/**,bootstrap/cache/**,public/**,node_modules/**,tests/**
-                            ) else (
-                                echo Failed to generate token, manual setup may be required
-                                echo Please check SonarQube at http://localhost:%SONARQUBE_PORT%
-                                exit /b 1
-                            )
-                        )
                     '''
                 }
             }
@@ -538,13 +514,19 @@ pipeline {
                     for /f "tokens=5" %%a in ('netstat -aon ^| findstr :8080') do taskkill /f /pid %%a 2>nul
                 '''
                 
-                // Stop and remove Docker containers
+                // Stop and remove Docker containers (optional - commented out to preserve data)
                 bat '''
-                    docker stop %SONARQUBE_CONTAINER% 2>nul || echo SonarQube container not running
-                    docker rm %SONARQUBE_CONTAINER% 2>nul || echo SonarQube container not found
-                    docker stop %ZAP_CONTAINER% 2>nul || echo ZAP container not running  
-                    docker rm %ZAP_CONTAINER% 2>nul || echo ZAP container not found
-                    docker network rm %DOCKER_NETWORK% 2>nul || echo Network not found
+                    echo Containers will be left running to preserve SonarQube data and tokens
+                    echo To manually stop: docker stop %SONARQUBE_CONTAINER% %ZAP_CONTAINER%
+                    echo To manually remove: docker rm %SONARQUBE_CONTAINER% %ZAP_CONTAINER%
+                    echo SonarQube data is stored in persistent volumes: sonarqube-data, sonarqube-logs, sonarqube-extensions
+                    
+                    REM Uncomment below lines if you want to clean up containers after each run
+                    REM docker stop %SONARQUBE_CONTAINER% 2>nul || echo SonarQube container not running
+                    REM docker rm %SONARQUBE_CONTAINER% 2>nul || echo SonarQube container not found
+                    REM docker stop %ZAP_CONTAINER% 2>nul || echo ZAP container not running  
+                    REM docker rm %ZAP_CONTAINER% 2>nul || echo ZAP container not found
+                    REM docker network rm %DOCKER_NETWORK% 2>nul || echo Network not found
                 '''
                 
                 // Clean up temporary files
