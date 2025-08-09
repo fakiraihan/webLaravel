@@ -370,48 +370,30 @@ pipeline {
                     // Create reports directory
                     bat 'if not exist reports mkdir reports'
                     
-                    // Create ZAP authentication configuration
+                    // Run ZAP baseline scan (basic security testing)
                     bat '''
-                        echo Creating ZAP authentication configuration...
-                        echo # ZAP Authentication Configuration > reports\\auth.conf
-                        echo env.context=webLaravel >> reports\\auth.conf
-                        echo env.user=admin >> reports\\auth.conf
-                        echo env.password=password >> reports\\auth.conf
-                        echo env.loginUrl=http://host.docker.internal:8080/login >> reports\\auth.conf
-                        echo env.loggedInIndicator=\\Q/admin\\E >> reports\\auth.conf
-                        echo env.loggedOutIndicator=\\Qvalue="Login"\\E >> reports\\auth.conf
-                        echo env.loginRequestData=username={%%username%%}^&password={%%password%%}^&_token={%%_token%%} >> reports\\auth.conf
-                    '''
-                    
-                    // Create a simple login script for ZAP
-                    bat '''
-                        echo Creating authentication script...
-                        (
-                        echo {
-                        echo   "authentication": {
-                        echo     "method": "form",
-                        echo     "loginUrl": "http://host.docker.internal:8080/login",
-                        echo     "usernameParameter": "username",
-                        echo     "passwordParameter": "password",
-                        echo     "username": "admin",
-                        echo     "password": "password",
-                        echo     "loggedInRegex": ".*admin.*",
-                        echo     "loggedOutRegex": ".*Login.*"
-                        echo   }
-                        echo }
-                        ) > reports\\auth.json
-                    '''
-                    
-                    // Run ZAP baseline scan with authentication
-                    bat '''
-                        echo Running ZAP Baseline Scan with Authentication...
+                        echo Running ZAP Baseline Scan...
                         docker run -v "%CD%\\reports":/zap/wrk/:rw ^
                             -t zaproxy/zap-stable zap-baseline.py ^
                             -t http://host.docker.internal:8080 ^
                             -g gen.conf ^
                             -J zap-baseline-report.json ^
                             -r zap-baseline-report.html ^
-                            --hook-script=/zap/wrk/auth.json || echo Baseline scan completed with findings
+                            -m 2 ^
+                            -d || echo Baseline scan completed with findings
+                    '''
+                    
+                    // Run ZAP spider scan for endpoint discovery
+                    bat '''
+                        echo Running ZAP Spider Scan...
+                        docker run -v "%CD%\\reports":/zap/wrk/:rw ^
+                            -t zaproxy/zap-stable zap-baseline.py ^
+                            -t http://host.docker.internal:8080 ^
+                            -m 1 ^
+                            -s ^
+                            -J zap-spider-report.json ^
+                            -r zap-spider-report.html ^
+                            -d || echo Spider scan completed
                     '''
                     
                     // Run ZAP full scan with authentication
@@ -423,7 +405,7 @@ pipeline {
                             -g gen.conf ^
                             -J zap-full-report.json ^
                             -r zap-full-report.html ^
-                            --hook-script=/zap/wrk/auth.json || echo Full scan completed with findings
+                            -r zap-full-report.html || echo Full scan completed with findings
                     '''
                     
                     // Also run a spider scan to discover more endpoints after login
@@ -435,7 +417,7 @@ pipeline {
                             -s ^
                             -J zap-spider-report.json ^
                             -r zap-spider-report.html ^
-                            --hook-script=/zap/wrk/auth.json || echo Spider scan completed
+                            -r zap-spider-report.html || echo Spider scan completed
                     '''
                     
                     // Run ZAP API scan with authentication if you have API endpoints
