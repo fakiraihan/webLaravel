@@ -365,14 +365,14 @@ pipeline {
                         echo Quality Gate Response:
                         type qg_result.json
                         
-                        findstr /i "ERROR FAILED" qg_result.json >nul
+                        findstr /c:"\"status\":\"ERROR\"" qg_result.json >nul
                         if %errorlevel% equ 0 (
                             echo ❌ Quality Gate FAILED!
                             echo Review the issues in SonarQube: http://localhost:%SONARQUBE_PORT%/dashboard?id=webLaravel
                             exit /b 1
                         )
                         
-                        findstr /i "OK PASSED" qg_result.json >nul
+                        findstr /c:"\"status\":\"OK\"" qg_result.json >nul
                         if %errorlevel% equ 0 (
                             echo ✅ Quality Gate PASSED!
                             goto quality_gate_success
