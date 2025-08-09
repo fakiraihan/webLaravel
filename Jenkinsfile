@@ -7,7 +7,12 @@ pipeline {
         APP_URL = 'http://host.docker.internal:8080'
         // Docker configuration
         SONARQUBE_CONTAINER = 'sonarqube-container'
-        ZAP_CONTAINER = 'zap-container'
+                          REM Check if analysis is complete (status: SUCCESS or FAILED)
+                        findstr /i "SUCCESS FAILED" analysis_status.json >nul
+                        if %errorlevel% equ 0 (
+                            echo Analysis completed!
+                            goto check_final_status
+                        )ZAP_CONTAINER = 'zap-container'
         SONARQUBE_PORT = '9000'
         ZAP_PORT = '8080'
         // Network for containers
@@ -286,7 +291,7 @@ pipeline {
                         )
                         
                         REM Check if analysis is complete (status: SUCCESS or FAILED)
-                        findstr /i "SUCCESS\|FAILED" analysis_status.json >nul
+                        findstr /i "SUCCESS|FAILED" analysis_status.json >nul
                         if %errorlevel% equ 0 (
                             echo Analysis completed!
                             goto check_final_status
@@ -312,14 +317,14 @@ pipeline {
                         type qg_result.json
                         
                         REM Check quality gate status
-                        findstr /i "ERROR\|FAILED" qg_result.json >nul
+                        findstr /i "ERROR FAILED" qg_result.json >nul
                         if %errorlevel% equ 0 (
                             echo ❌ Quality Gate FAILED!
                             echo Review the issues in SonarQube: http://localhost:%SONARQUBE_PORT%/dashboard?id=webLaravel
                             exit /b 1
                         )
                         
-                        findstr /i "OK\|PASSED" qg_result.json >nul
+                        findstr /i "OK PASSED" qg_result.json >nul
                         if %errorlevel% equ 0 (
                             echo ✅ Quality Gate PASSED!
                             goto quality_gate_success
