@@ -1,6 +1,13 @@
 pipeline {
     agent any
 
+    options {
+        timeout(time: 45, unit: 'MINUTES')
+        retry(1)
+        buildDiscarder(logRotator(numToKeepStr: '5'))
+        skipDefaultCheckout(true)
+    }
+
     environment {
         SONAR_TOKEN = credentials('sonarqube-token')
         // Define application URL for DAST testing
@@ -17,6 +24,34 @@ pipeline {
     }
 
     stages {
+        stage('Pre-Check Docker') {
+            steps {
+                script {
+                    echo 'Checking Docker Desktop status and resources...'
+                    bat '''
+                        echo Checking Docker Desktop status...
+                        docker info > docker_status.txt 2>&1 || (
+                            echo Docker Desktop is not running or having issues
+                            echo Please start Docker Desktop and ensure it has adequate resources:
+                            echo - Memory: 4GB minimum ^(8GB recommended^)
+                            echo - CPUs: 2 minimum ^(4 recommended^)
+                            echo - Disk space: 20GB minimum
+                            exit /b 1
+                        )
+                        
+                        echo Docker Desktop status:
+                        findstr /i "memory\|cpu\|containers running\|images" docker_status.txt
+                        
+                        echo Cleaning up any orphaned containers...
+                        docker container prune -f 2>nul || echo No orphaned containers
+                        
+                        echo Available system resources:
+                        docker system df
+                    '''
+                }
+            }
+        }
+
         stage('Checkout') {
             steps {
                 script {
@@ -43,38 +78,44 @@ pipeline {
                         docker ps | findstr %SONARQUBE_CONTAINER% && (
                             echo SonarQube container is already running, reusing it
                         ) || (
-                            echo Starting new SonarQube container with persistent storage...
+                            echo Starting new SonarQube container with resource limits...
                             docker stop %SONARQUBE_CONTAINER% 2>nul || echo SonarQube container not running
                             docker rm %SONARQUBE_CONTAINER% 2>nul || echo SonarQube container not found
+                            
+                            echo Checking Docker Desktop status...
+                            docker info > docker_info.txt 2>nul || (
+                                echo Docker Desktop appears to be having issues
+                                echo Please ensure Docker Desktop is running and has enough resources
+                                echo Recommended: 4GB RAM, 2 CPUs minimum
+                                exit /b 1
+                            )
+                            
                             docker run -d ^
                                 --name %SONARQUBE_CONTAINER% ^
                                 --network %DOCKER_NETWORK% ^
                                 -p %SONARQUBE_PORT%:9000 ^
+                                --memory=2g ^
+                                --cpus=1.0 ^
                                 -v sonarqube-data:/opt/sonarqube/data ^
                                 -v sonarqube-logs:/opt/sonarqube/logs ^
                                 -v sonarqube-extensions:/opt/sonarqube/extensions ^
                                 -e SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true ^
+                                -e SONAR_JAVA_OPTS="-Xmx1g -Xms512m" ^
                                 sonarqube:latest
                         )
                         
-                        echo Checking if ZAP container is already running...
-                        docker ps | findstr %ZAP_CONTAINER% && (
-                            echo ZAP container is already running, reusing it
-                        ) || (
-                            echo Starting new ZAP container...
-                            docker stop %ZAP_CONTAINER% 2>nul || echo ZAP container not running
-                            docker rm %ZAP_CONTAINER% 2>nul || echo ZAP container not found
-                            docker run -d ^
-                                --name %ZAP_CONTAINER% ^
-                                --network %DOCKER_NETWORK% ^
-                                -p %ZAP_PORT%:8080 ^
-                                zaproxy/zap-stable zap.sh -daemon -host 0.0.0.0 -port 8080 -config api.addrs.addr.name=.* -config api.addrs.addr.regex=true
-                        )
-                        
-                        echo SonarQube container started, waiting 20 seconds...
-                        ping 127.0.0.1 -n 21 > nul
+                        echo Waiting for SonarQube to stabilize...
+                        ping 127.0.0.1 -n 31 > nul
                         
                         echo Verifying SonarQube container is running...
+                        docker ps | findstr %SONARQUBE_CONTAINER% || (
+                            echo SonarQube container failed to start
+                            echo Container logs:
+                            docker logs %SONARQUBE_CONTAINER%
+                            echo Docker system info:
+                            type docker_info.txt
+                            exit /b 1
+                        )
                         docker ps | findstr %SONARQUBE_CONTAINER% || (
                             echo SonarQube container failed to start
                             echo Container logs:
@@ -372,22 +413,31 @@ pipeline {
                     
                     // Run ZAP baseline scan (basic security testing)
                     bat '''
-                        echo Running ZAP Baseline Scan...
-                        docker run -v "%CD%\\reports":/zap/wrk/:rw ^
-                            -t zaproxy/zap-stable zap-baseline.py ^
+                        echo Running ZAP Baseline Scan with resource limits...
+                        docker run --rm ^
+                            --memory=1g ^
+                            --cpus=0.5 ^
+                            -v "%CD%\\reports":/zap/wrk/:rw ^
+                            zaproxy/zap-stable zap-baseline.py ^
                             -t http://host.docker.internal:8080 ^
                             -g gen.conf ^
                             -J zap-baseline-report.json ^
                             -r zap-baseline-report.html ^
-                            -m 2 ^
+                            -m 1 ^
                             -d || echo Baseline scan completed with findings
                     '''
                     
+                    // Wait between scans to reduce resource pressure
+                    bat 'echo Waiting 10 seconds between scans... && ping 127.0.0.1 -n 11 > nul'
+                    
                     // Run ZAP spider scan for endpoint discovery
                     bat '''
-                        echo Running ZAP Spider Scan...
-                        docker run -v "%CD%\\reports":/zap/wrk/:rw ^
-                            -t zaproxy/zap-stable zap-baseline.py ^
+                        echo Running ZAP Spider Scan with resource limits...
+                        docker run --rm ^
+                            --memory=512m ^
+                            --cpus=0.5 ^
+                            -v "%CD%\\reports":/zap/wrk/:rw ^
+                            zaproxy/zap-stable zap-baseline.py ^
                             -t http://host.docker.internal:8080 ^
                             -m 1 ^
                             -s ^
