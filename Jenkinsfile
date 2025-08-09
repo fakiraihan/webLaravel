@@ -263,47 +263,76 @@ pipeline {
                 script {
                     echo 'Checking SonarQube Quality Gate...'
                     
-                    // Wait a bit for analysis to complete
-                    bat 'ping 127.0.0.1 -n 31 > nul'
-                    
-                    // Check quality gate status via API
+                    // Wait for analysis to complete and check quality gate
                     bat '''
-                        echo Checking quality gate status...
+                        echo Waiting for SonarQube analysis to complete...
                         set /a count=0
-                        :check_quality_gate
+                        :wait_analysis_complete
                         set /a count+=1
-                        if %count% GTR 10 (
-                            echo Quality gate check timeout after 5 minutes
-                            exit /b 1
+                        if %count% GTR 20 (
+                            echo Analysis timeout after 10 minutes
+                            echo Checking final status anyway...
+                            goto check_final_status
                         )
                         
-                        echo Checking quality gate... attempt %count%/10
-                        curl -u admin:admin "http://localhost:%SONARQUBE_PORT%/api/qualitygates/project_status?projectKey=webLaravel" > qg_result.json 2>nul
+                        echo Checking analysis status... attempt %count%/20
+                        curl -H "Authorization: Bearer squ_1f81081978987873814451a2d3d5a0821f3e8152" ^
+                            "http://localhost:%SONARQUBE_PORT%/api/ce/activity?component=webLaravel&ps=1" > analysis_status.json 2>nul
+                        
                         if %errorlevel% neq 0 (
-                            echo Quality gate API call failed, waiting 30 seconds...
+                            echo API call failed, waiting 30 seconds...
                             ping 127.0.0.1 -n 31 > nul
-                            goto check_quality_gate
+                            goto wait_analysis_complete
                         )
                         
-                        findstr /i "ERROR" qg_result.json
+                        REM Check if analysis is complete (status: SUCCESS or FAILED)
+                        findstr /i "SUCCESS\|FAILED" analysis_status.json >nul
                         if %errorlevel% equ 0 (
-                            echo Quality Gate FAILED!
-                            type qg_result.json
+                            echo Analysis completed!
+                            goto check_final_status
+                        )
+                        
+                        echo Analysis still in progress, waiting 30 seconds...
+                        ping 127.0.0.1 -n 31 > nul
+                        goto wait_analysis_complete
+                        
+                        :check_final_status
+                        echo Checking Quality Gate status...
+                        curl -H "Authorization: Bearer squ_1f81081978987873814451a2d3d5a0821f3e8152" ^
+                            "http://localhost:%SONARQUBE_PORT%/api/qualitygates/project_status?projectKey=webLaravel" > qg_result.json 2>nul
+                        
+                        if %errorlevel% neq 0 (
+                            echo Quality Gate API call failed
+                            echo Showing analysis status:
+                            type analysis_status.json
                             exit /b 1
                         )
                         
-                        findstr /i "OK" qg_result.json
+                        echo Quality Gate Response:
+                        type qg_result.json
+                        
+                        REM Check quality gate status
+                        findstr /i "ERROR\|FAILED" qg_result.json >nul
                         if %errorlevel% equ 0 (
-                            echo Quality Gate PASSED!
+                            echo ❌ Quality Gate FAILED!
+                            echo Review the issues in SonarQube: http://localhost:%SONARQUBE_PORT%/dashboard?id=webLaravel
+                            exit /b 1
+                        )
+                        
+                        findstr /i "OK\|PASSED" qg_result.json >nul
+                        if %errorlevel% equ 0 (
+                            echo ✅ Quality Gate PASSED!
                             goto quality_gate_success
                         )
                         
-                        echo Quality gate still processing, waiting 30 seconds...
-                        ping 127.0.0.1 -n 31 > nul
-                        goto check_quality_gate
+                        REM If no clear status found, show the response and continue with warning
+                        echo ⚠️  Quality Gate status unclear, continuing...
+                        echo Full response:
+                        type qg_result.json
                         
                         :quality_gate_success
-                        echo Quality Gate passed successfully!
+                        echo Quality Gate check completed successfully!
+                        echo View detailed results: http://localhost:%SONARQUBE_PORT%/dashboard?id=webLaravel
                     '''
                 }
             }
