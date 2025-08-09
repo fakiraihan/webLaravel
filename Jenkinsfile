@@ -306,6 +306,7 @@ pipeline {
                             -Dsonar.projectKey=webLaravel ^
                             -Dsonar.projectName=webLaravel ^
                             -Dsonar.projectVersion=1.0 ^
+                            -Dsonar.language=php ^
                             -Dsonar.sources=app,config,database,routes,resources ^
                             -Dsonar.exclusions=vendor/**,storage/**,bootstrap/cache/**,public/**,node_modules/**,tests/**
                     '''
