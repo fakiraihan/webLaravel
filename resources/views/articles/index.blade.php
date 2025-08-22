@@ -14,24 +14,18 @@
   </div>
   <div class="flex flex-1 justify-end gap-8">
     <div class="flex items-center gap-9">
-    </div>
-    @auth
-      @if(auth()->user()->is_admin)
-        <a href="{{ route('admin.index') }}" class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-10 px-4 bg-[#53d22c] text-[#131712] text-sm font-bold leading-normal tracking-[0.015em]">
-          <span class="truncate">Admin</span>
-        </a>
-      @endif
-      <form method="POST" action="{{ route('logout') }}" class="inline">
-        @csrf
-        <button type="submit" class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-10 px-4 bg-[#2d372a] text-white text-sm font-bold leading-normal tracking-[0.015em]">
-          <span class="truncate">Logout</span>
-        </button>
-      </form>
-    @else
-      <a href="{{ route('login') }}" class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-10 px-4 bg-[#2d372a] text-white text-sm font-bold leading-normal tracking-[0.015em]">
-        <span class="truncate">Login</span>
+      <!-- VULN: Direct admin access without auth -->
+      <a href="{{ route('admin.index') }}" class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-10 px-4 bg-[#53d22c] text-[#131712] text-sm font-bold leading-normal tracking-[0.015em]">
+        <span class="truncate">Admin (No Auth!)</span>
       </a>
-    @endauth
+      <!-- VULN: SQLi test links -->
+      <a href="{{ url('/search/<script>alert(\'XSS\')</script>') }}" class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-10 px-4 bg-red-600 text-white text-sm font-bold leading-normal tracking-[0.015em]">
+        <span class="truncate">XSS Test</span>
+      </a>
+      <a href="{{ url('/user/1\' UNION SELECT * FROM users--') }}" class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-10 px-4 bg-red-600 text-white text-sm font-bold leading-normal tracking-[0.015em]">
+        <span class="truncate">SQLi Test</span>
+      </a>
+    </div>
     <div
       class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10"
       style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuDcl3j_ZbxF4gAJNzwC0UpQXJiKUJ7oA_RPdFFqEH9gs6EdY-ccnUAxFi8Okk-EIeD9VZ-V9TGsit34xf5ZVOfgwcoxzD7volKqNscHJW0oUQFayWo9NWND2fGMd5KtOa4WmpG8xX5hOaZVCWOP7DumWIHWwlqrVK4RmlZdK9B12Y2jcqlUGEmX-iZzngJUMO7RhZWE1HqVdjXVdXJ9i7Va8RWch2i3r2GqH2xcq5YNlvizfM8veBimGmgL0FFEBJtNvlBwKFeXyZc");'

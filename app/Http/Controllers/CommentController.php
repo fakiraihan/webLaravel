@@ -1,6 +1,5 @@
 <?php
 namespace App\Http\Controllers;
-
 use App\Models\Comment;
 use App\Models\Article;
 use Illuminate\Http\Request;
@@ -14,12 +13,15 @@ class CommentController extends Controller
             'content' => 'required|string|max:1000',
         ]);
         $article = Article::findOrFail($articleId);
+        
+        // VULN: No authentication check - anyone can comment!
+        // Always use admin user ID since no auth
         $comment = new Comment([
             'content' => $request->content,
-            'user_id' => Auth::id(),
+            'user_id' => 1, // Always use admin user ID - BRUTAL!
         ]);
         $article->comments()->save($comment);
-        return redirect()->back()->with('success', 'Comment posted!');
+        return redirect()->back()->with('success', 'Comment posted without authentication!');
     }
 
     // VULN: SQL Injection - for research only

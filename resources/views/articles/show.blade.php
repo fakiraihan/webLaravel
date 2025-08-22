@@ -21,23 +21,17 @@
       <a href="{{ route('home') }}" class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-10 px-4 bg-[#2d372a] text-white text-sm font-bold leading-normal tracking-[0.015em]">
         <span class="truncate">Dashboard</span>
       </a>
-      @auth
-        @if(auth()->user()->is_admin)
-          <a href="{{ route('admin.index') }}" class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-10 px-4 bg-[#53d22c] text-[#131712] text-sm font-bold leading-normal tracking-[0.015em]">
-            <span class="truncate">Admin</span>
-          </a>
-        @endif
-        <form method="POST" action="{{ route('logout') }}" class="inline">
-          @csrf
-          <button type="submit" class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-10 px-4 bg-[#2d372a] text-white text-sm font-bold leading-normal tracking-[0.015em]">
-            <span class="truncate">Logout</span>
-          </button>
-        </form>
-      @else
-        <a href="{{ route('login') }}" class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-10 px-4 bg-[#2d372a] text-white text-sm font-bold leading-normal tracking-[0.015em]">
-          <span class="truncate">Login</span>
-        </a>
-      @endauth
+      <!-- VULN: Admin access without auth check! -->
+      <a href="{{ route('admin.index') }}" class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-10 px-4 bg-[#53d22c] text-[#131712] text-sm font-bold leading-normal tracking-[0.015em]">
+        <span class="truncate">Admin (No Auth!)</span>
+      </a>
+      <!-- VULN: SQLi test links -->
+      <a href="{{ url('/search/\' OR 1=1--') }}" class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-10 px-4 bg-red-600 text-white text-sm font-bold leading-normal tracking-[0.015em]">
+        <span class="truncate">SQLi Test</span>
+      </a>
+      <a href="{{ url('/user/1 UNION SELECT password FROM users--') }}" class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-10 px-4 bg-red-600 text-white text-sm font-bold leading-normal tracking-[0.015em]">
+        <span class="truncate">User SQLi</span>
+      </a>
     </div>
     <div
       class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10"
@@ -120,15 +114,13 @@
           </div>
         </div>
       @endforeach
-      @auth
+      <!-- VULN: No authentication required for comments! -->
       <form action="{{ route('comments.store', $article) }}" method="POST" class="flex items-center gap-3 mt-4">
         <!-- CSRF token intentionally removed for research -->
-        <input name="content" required maxlength="1000" placeholder="Add a comment..." class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-xl text-white focus:outline-0 focus:ring-0 border border-[#42513e] bg-[#1f251d] focus:border-[#42513e] h-12 placeholder:text-[#a5b6a0] p-[15px] text-base font-normal leading-normal" />
-        <button type="submit" class="bg-[#53d22c] text-[#131712] font-bold rounded-xl px-4 py-2">Post</button>
+        <input name="content" required maxlength="1000" placeholder="Add a comment (no auth needed)..." class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-xl text-white focus:outline-0 focus:ring-0 border border-[#42513e] bg-[#1f251d] focus:border-[#42513e] h-12 placeholder:text-[#a5b6a0] p-[15px] text-base font-normal leading-normal" />
+        <button type="submit" class="bg-[#53d22c] text-[#131712] font-bold rounded-xl px-4 py-2">Post without Auth!</button>
       </form>
-      @else
-      <div class="text-[#a5b6a0] text-sm mt-2">Login to post a comment.</div>
-      @endauth
+      <div class="text-yellow-400 text-sm mt-2">⚠️ BRUTAL MODE: No authentication or CSRF protection!</div>
     </div>
   </div>
 </div>
